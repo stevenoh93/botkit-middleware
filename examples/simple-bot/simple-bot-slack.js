@@ -18,6 +18,7 @@ require('dotenv').load();
 
 var Botkit = require('botkit');
 var express = require('express');
+var bodyParser = require('body-parser');
 var middleware = require('botkit-middleware-watson')({
   username: process.env.CONVERSATION_USERNAME,
   password: process.env.CONVERSATION_PASSWORD,
@@ -30,6 +31,7 @@ var slackController = Botkit.slackbot();
 var slackBot = slackController.spawn({
   token: process.env.SLACK_TOKEN
 });
+
 slackController.hears(['.*'], ['direct_message', 'direct_mention', 'mention'], function(bot, message) {
   slackController.log('Slack message received');
   middleware.interpret(bot, message, function(err) {
@@ -37,13 +39,32 @@ slackController.hears(['.*'], ['direct_message', 'direct_mention', 'mention'], f
 		  bot.reply(message, message.watsonData.output.text.join('\n'));
 	});
 });
+var VERIFY_TOKEN = 'pPGbvI2HZjqh6OCWGphZJw8o';
+slackController.on('slash_command',function(bot,message) {
+  // Validate Slack verify token
+  if (message.token !== VERIFY_TOKEN) {
+    return bot.res.send(401, 'Unauthorized')
+  }
 
+  middleware.interpret(bot, message, function(err) {
+    if (!err) {
+      console.log(JSON.stringify(message,null,' '));
+		  bot.replyPrivate(message, message.watsonData.output.text.join('\n'));
+    }
+	});
+});
+
+// Connect to Watson middleware
+// slackController.middleware.receive.use(middleware.receive);
 slackBot.startRTM();
 
 // Create an Express app
 var app = express();
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 var port = process.env.PORT || 5000;
 app.set('port', port);
+slackController.createWebhookEndpoints(app);
 app.listen(port, function() {
   console.log('Client server listening on port ' + port);
 });
